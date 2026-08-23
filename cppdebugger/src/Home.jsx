@@ -1,6 +1,11 @@
 import React, { useState, useEffect } from "react";
+// At the very top of Home.jsx, right below your imports
+const API_BASE = import.meta.env.PROD 
+    ? 'https://multi-agent-cppdebugger.onrender.com'  // 💡 Your live Render URL
+    : '';                                             // 💡 Empty string uses Vite Proxy locally
 
 export default function Home() {
+    
     const [code, setCode] = useState("");
     const [result, setResult] = useState(null);
     const [loading, setLoading] = useState(false);
