@@ -6,7 +6,7 @@ export default defineConfig({
   server: {
     proxy: {
       '/api': {
-        target: 'http://127.0.0.1:8000', // Your Django backend port
+        target: 'https://multi-agent-cppdebugger.onrender.com', // Your Django backend port
         changeOrigin: true,
         secure: false,
       }
