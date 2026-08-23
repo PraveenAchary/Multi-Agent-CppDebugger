@@ -1,12 +1,12 @@
 import { defineConfig } from 'vite'
-import react from '@vitejs/plugin-react' // 👈 Fixed the typo here!
+import react from '@vitejs/plugin-react'
 
 export default defineConfig({
   plugins: [react()],
   server: {
     proxy: {
       '/api': {
-        target: 'https://multi-agent-cppdebugger.onrender.com', // Your Django backend port
+        target: 'http://127.0.0.1:8000', // Keep local fallback here
         changeOrigin: true,
         secure: false,
       }
