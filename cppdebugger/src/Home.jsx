@@ -17,7 +17,7 @@ export default function Home() {
 
     const fetchHistory = async () => {
     try {
-        const res = await fetch("/api/Debug/history/", {
+        const res = await fetch(`${API_BASE}/api/Debug/history/`, {
             credentials: "include",
         });
 
@@ -45,7 +45,7 @@ export default function Home() {
     const handleCheck = async () => {
         setLoading(true);
         try {
-            const res = await fetch("/api/Debug/analyze/", {
+            const res = await fetch(`${API_BASE}/api/Debug/analyze/`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 credentials: "include",
