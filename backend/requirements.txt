@@ -12,4 +12,5 @@ groq>=0.9.0
 
 # System Utility
 python-dotenv>=1.0.1
+python-decouple>=3.8
 gunicorn>=21.2.0
