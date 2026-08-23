@@ -1,0 +1,14 @@
+# Web Framework & API Layer
+django>=5.2.0
+djangorestframework>=3.14.0
+django-cors-headers>=4.3.0
+
+# Multi-Agent Coordination Graph Orchestrator
+langgraph>=1.2.11
+langchain-core>=0.3.0
+
+# LLM Inference API Services
+groq>=0.9.0
+
+# System Utility
+python-dotenv>=1.0.1
