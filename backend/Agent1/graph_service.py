@@ -34,18 +34,21 @@ def repair_node(state: DebugState) -> DebugState:
     return state
 
 def verify_node(state: DebugState) -> DebugState:
-    result = verify_code(state["current_code"])
+    result = analyze_cpp(state["current_code"])  # swap verify_code for analyze_cpp
     state["compiles"] = result["compiles"]
     state["compiler_errors"] = result["compiler_errors"]
+    state["static_warnings"] = result["static_warnings"]  # now gets updated too
     return state
 
 def should_continue(state: DebugState) -> str:
-    if state["compiles"]:
+    memory_safety_warnings = [
+        w for w in state["static_warnings"] if w["severity"] == "warning"
+    ]
+    if state["compiles"] and not memory_safety_warnings:
         return END
     if state["iteration"] >= state["max_iterations"]:
         return END
     return "analyze"
-
 def _build_graph():
     workflow = StateGraph(DebugState)
     workflow.add_node("analyze", analyze_node)
