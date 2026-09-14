@@ -79,7 +79,7 @@ def analyze_cpp(code: str) -> dict:
                 f.write(code)
             try:
                 cppcheck_result = subprocess.run(
-                    ["cppcheck", "--enable=warning,style", src_path],
+                    ["cppcheck", " --enable=all --inconclusive", src_path],
                     capture_output=True,
                     text=True,
                     timeout=ANALYSIS_TIMEOUT,
