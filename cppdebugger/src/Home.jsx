@@ -238,6 +238,9 @@ export default function Home() {
                     <pre className="fixed-code">{result.corrected_code}</pre>
                   </div>
                 )}
+                {result.iterations !== undefined && (
+    <p>Iterations: {result.iterations}</p>
+)}
               </div>
             )}
           </section>
