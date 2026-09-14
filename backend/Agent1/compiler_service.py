@@ -79,11 +79,11 @@ def analyze_cpp(code: str) -> dict:
                 f.write(code)
             try:
                 cppcheck_result = subprocess.run(
-                    ["cppcheck", " --enable=all --inconclusive", src_path],
-                    capture_output=True,
-                    text=True,
-                    timeout=ANALYSIS_TIMEOUT,
-                )
+    ["cppcheck", "--enable=all", "--inconclusive", src_path],
+    capture_output=True,
+    text=True,
+    timeout=ANALYSIS_TIMEOUT,
+)
                 static_warnings = _parse_cppcheck_output(cppcheck_result.stderr)
             except (subprocess.TimeoutExpired, FileNotFoundError):
                 pass
