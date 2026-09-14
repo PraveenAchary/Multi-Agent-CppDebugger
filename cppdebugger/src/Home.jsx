@@ -192,9 +192,7 @@ export default function Home() {
                 </span>
               )}
             </div>
-             {result.iterations !== undefined && (
-    <p>Iterations: {result.iterations}</p>
-)}
+             
             {!result && !loading && (
               <div className="empty-state">
                 <div className="empty-glyph">{"{ }"}</div>
