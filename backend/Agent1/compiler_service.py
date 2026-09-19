@@ -43,7 +43,7 @@ def compile_check(code: str) -> dict:
     """
     with tempfile.TemporaryDirectory() as tmpdir:
         src_path = os.path.join(tmpdir, "submission.cpp")
-        with open(src_path, "w") as f:
+        with open(src_path, "w", encoding="utf-8") as f:
             f.write(code)
 
         try:
@@ -75,7 +75,7 @@ def analyze_cpp(code: str) -> dict:
     if compile_result["compiles"]:
         with tempfile.TemporaryDirectory() as tmpdir:
             src_path = os.path.join(tmpdir, "submission.cpp")
-            with open(src_path, "w") as f:
+            with open(src_path, "w", encoding="utf-8") as f:
                 f.write(code)
             try:
                 cppcheck_result = subprocess.run(
