@@ -30,6 +30,7 @@ ALLOWED_HOSTS = [
     "multi-agent-cppdebugger.onrender.com",  # Your backend domain
     "127.0.0.1",
     "localhost",
+    "http://127.0.0.1:8000",
 ]
 
 # Application definition
@@ -51,11 +52,12 @@ INSTALLED_APPS = [
 
 CORS_ALLOW_ALL_ORIGINS = False
 CORS_ALLOWED_ORIGINS = [
-    "https://cppdebugger.vercel.app",
-    "http://localhost:5173",
+    "http://localhost:5173",  # Default Vite dev server port
     "http://127.0.0.1:5173",
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
+    "https://cppdebugger.vercel.app",  # Your production frontend URL
 ]
-
 CORS_ALLOW_CREDENTIALS = True
 
 CSRF_TRUSTED_ORIGINS = [
@@ -158,4 +160,3 @@ SESSION_COOKIE_SAMESITE = 'None'
 SESSION_COOKIE_SECURE = True
 CSRF_COOKIE_SAMESITE = 'None'
 CSRF_COOKIE_SECURE = True
-
