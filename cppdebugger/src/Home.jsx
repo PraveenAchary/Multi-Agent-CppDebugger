@@ -261,11 +261,19 @@ export default function Home() {
                       <span className="history-index">#{i + 1}</span>
                     </div>
                     <pre 
-                        className="history-code" 
-                        style={{ overflowX: 'auto', whiteSpace: 'pre', maxWidth: '100%', display: 'block' }}
-                      >
-                        {item.code}
-                      </pre>
+  className="history-code" 
+  style={{ 
+    maxHeight: '120px', 
+    overflowY: 'auto', 
+    overflowX: 'auto', 
+    whiteSpace: 'pre', 
+    maxWidth: '100%', 
+    display: 'block' 
+  }}
+>
+  {item.code}
+</pre>
+
                   </li>
                 ))}
               </ul>
