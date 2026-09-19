@@ -38,8 +38,12 @@ Compiler/static analysis diagnostics:
 
 Rules:
 - Return ONLY the corrected C++ code.
-- Do not include explanations, comments about what you changed, or markdown code fences.
-- Preserve the original program's intent and structure as much as possible; fix only what's broken."""
+- Preserve the original program's intent and structure as much as possible; fix only what's broken.
+-In the corrected_code output, insert clean C++ comments (//) directly above or beside the modified lines explaining the cause of the error, what was fixed, and how it was corrected.
+
+
+
+"""
 
     try:
         response = client.chat.completions.create(
