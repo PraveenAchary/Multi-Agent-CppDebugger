@@ -26,8 +26,11 @@ SECRET_KEY = 'django-insecure-7#^@maa$sth((90uu!ltgzbgq4ib==unt6xjt!&3$5^gtm_mc9
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = ['*']
-
+ALLOWED_HOSTS = [
+    "multi-agent-cppdebugger.onrender.com",  # Your backend domain
+    "127.0.0.1",
+    "localhost",
+]
 
 # Application definition
 
