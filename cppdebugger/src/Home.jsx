@@ -1,9 +1,7 @@
 import React, { useState, useEffect, useRef } from "react";
 
 // At the very top of Home.jsx, right below your imports
-const API_BASE = import.meta.env.PROD
-  ? "https://multi-agent-cppdebugger.onrender.com"
-  : "";
+const API_BASE = import.meta.env.VITE_API_URL;
 
 export default function Home() {
   const [code, setCode] = useState("");
