@@ -21,6 +21,7 @@ def analyze_code(request):
     Submission.objects.create(
         session_key=session_key,
         code=code,
+        corrected_code=result.get("corrected_code",""),
         compiles=result["compiles"],
     )
 
@@ -35,10 +36,17 @@ def get_history(request):
         return Response([])
 
     session_key = request.session.session_key
-    submissions = Submission.objects.filter(session_key=session_key)[:3]
+    submissions = Submission.objects.filter(session_key=session_key)
 
     data = [
-        {"code": s.code, "compiles": s.compiles, "created_at": s.created_at}
+        {
+            "id":s.id,
+            "code": s.code,
+            "corrected_code":s.corrected_code,
+            "compiles": s.compiles,
+            "created_at": s.created_at
+            }
         for s in submissions
     ]
     return Response(data)
+    
