@@ -237,8 +237,8 @@ export default function Home() {
                   </div>
                 )}
                 {result.iterations !== undefined && (
-    <p>Iterations: {result.iterations}</p>
-)}
+                  <p>Iterations: {result.iterations}</p>
+                )}
               </div>
             )}
           </section>
@@ -260,20 +260,9 @@ export default function Home() {
                     <div className="history-item-head">
                       <span className="history-index">#{i + 1}</span>
                     </div>
-                    <pre 
-  className="history-code" 
-  style={{ 
-    maxHeight: '120px', 
-    overflowY: 'auto', 
-    overflowX: 'auto', 
-    whiteSpace: 'pre', 
-    maxWidth: '100%', 
-    display: 'block' 
-  }}
->
-  {item.code}
-</pre>
-
+                    <pre className="history-code">
+                      {item.code}
+                    </pre>
                   </li>
                 ))}
               </ul>
@@ -675,25 +664,29 @@ const CSS = `
   font-weight: 700;
   color: var(--violet);
 }
+
+/* Updated history-code styles to enable smooth scrolling */
 .history-code {
   font-family: var(--font-mono);
   font-size: 11.5px;
   line-height: 1.5;
   color: var(--text-mid);
   margin: 0;
-  max-height: 90px;
-  overflow: hidden;
-  white-space: pre-wrap;
-  word-break: break-word;
+  max-height: 120px;
+  overflow: auto;
+  white-space: pre;
+  word-break: normal;
 }
 
 .editor-body::-webkit-scrollbar,
 .fixed-code::-webkit-scrollbar,
 .history-code::-webkit-scrollbar {
   width: 8px;
+  height: 8px;
 }
-.editor-body ::-webkit-scrollbar-thumb,
-.fixed-code::-webkit-scrollbar-thumb {
+.editor-body::-webkit-scrollbar-thumb,
+.fixed-code::-webkit-scrollbar-thumb,
+.history-code::-webkit-scrollbar-thumb {
   background: var(--border-strong);
   border-radius: 8px;
 }
