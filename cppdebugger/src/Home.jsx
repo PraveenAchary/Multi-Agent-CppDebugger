@@ -1,8 +1,10 @@
 import React, { useState, useEffect, useRef } from "react";
 
-const API_BASE = window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1"
-  ? "http://127.0.0.1:8000" 
-  : import.meta.env.VITE_API_URL;
+const API_BASE="https://multi-agent-cppdebugger.onrender.com";
+
+// const API_BASE = window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1"
+//   ? "http://127.0.0.1:8000" 
+//   : import.meta.env.VITE_API_URL;
 
 export default function Home() {
   const [activeTab, setActiveTab] = useState("editor"); // "editor" or "history"
