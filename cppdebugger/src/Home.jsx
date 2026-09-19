@@ -1,14 +1,16 @@
 import React, { useState, useEffect, useRef } from "react";
 
-// At the very top of Home.jsx, right below your imports
-const API_BASE = import.meta.env.VITE_API_URL;
+const API_BASE = window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1"
+  ? "http://127.0.0.1:8000" 
+  : import.meta.env.VITE_API_URL;
 
 export default function Home() {
+  const [activeTab, setActiveTab] = useState("editor"); // "editor" or "history"
   const [code, setCode] = useState("");
   const [result, setResult] = useState(null);
   const [loading, setLoading] = useState(false);
   const [history, setHistory] = useState([]);
-  const [copied, setCopied] = useState(false);
+  const [copiedId, setCopiedId] = useState(null);
 
   const textareaRef = useRef(null);
   const lineNumsRef = useRef(null);
@@ -30,23 +32,13 @@ export default function Home() {
 
   const fetchHistory = async () => {
     try {
-      const res = await fetch(`${API_BASE}/api/Debug/history/`, {
-        credentials: "include",
-      });
-      if (!res.ok) {
-        throw new Error(`Server returned status ${res.status}`);
-      }
-      const data = await res.json();
-
-      if (Array.isArray(data)) {
-        setHistory(data);
-      } else {
-        console.error("Expected a list from server, but got:", data);
-        setHistory([]);
+      const res = await fetch(`${API_BASE}/api/Debug/history/`, { credentials: "include" });
+      if (res.ok) {
+        const data = await res.json();
+        setHistory(Array.isArray(data) ? data : []);
       }
     } catch (err) {
       console.error("Failed to fetch history:", err);
-      setHistory([]);
     }
   };
 
@@ -59,26 +51,22 @@ export default function Home() {
         credentials: "include",
         body: JSON.stringify({ code }),
       });
-      if (!res.ok) {
-        const errorText = await res.text();
-        throw new Error(`Server returned status ${res.status}: ${errorText}`);
-      }
+      if (!res.ok) throw new Error("Analysis failed");
       const data = await res.json();
       setResult(data);
       fetchHistory();
     } catch (err) {
-      console.error("Analyze request failed:", err);
+      console.error(err);
     } finally {
       setLoading(false);
     }
   };
 
-  const handleCopyFixed = async () => {
-    if (!result?.corrected_code) return;
+  const handleCopy = async (text, id) => {
     try {
-      await navigator.clipboard.writeText(result.corrected_code);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 1800);
+      await navigator.clipboard.writeText(text);
+      setCopiedId(id);
+      setTimeout(() => setCopiedId(null), 1800);
     } catch (e) {
       console.error("Copy failed", e);
     }
@@ -97,10 +85,10 @@ export default function Home() {
     <div className="cppdbg-root">
       <style>{CSS}</style>
 
-      {/* ambient glow orbs */}
       <div className="glow-orb glow-orb--one" />
       <div className="glow-orb glow-orb--two" />
 
+      {/* Header with Navigation Switcher */}
       <header className="topbar">
         <div className="brand">
           <span className="brand-mark">{"</>"}</span>
@@ -109,167 +97,220 @@ export default function Home() {
             <span className="brand-sub">AI-assisted static analysis</span>
           </div>
         </div>
+
+        <div className="nav-tabs">
+          <button 
+            type="button"
+            className={`nav-tab ${activeTab === "editor" ? "active" : ""}`}
+            onClick={() => setActiveTab("editor")}
+          >
+            Editor
+          </button>
+          <button 
+            type="button"
+            className={`nav-tab ${activeTab === "history" ? "active" : ""}`}
+            onClick={() => { setActiveTab("history"); fetchHistory(); }}
+          >
+            History <span className="badge">{history.length}</span>
+          </button>
+        </div>
+
         <div className="status-pill">
           <span className="status-dot" />
           Engine online
         </div>
       </header>
 
-      <main className="layout">
-        {/* ============ EDITOR PANEL ============ */}
-        <section className="panel editor-panel">
-          <div className="panel-glowline" />
-          <div className="tabbar">
-            <div className="tab tab--active">
-              <span className="tab-dot" />
-              main.cpp
+      {/* ================= EDITOR VIEW ================= */}
+      {activeTab === "editor" && (
+        <main className="layout">
+          <section className="panel editor-panel">
+            <div className="panel-glowline" />
+            <div className="tabbar">
+              <div className="tab tab--active">
+                <span className="tab-dot" />
+                main.cpp
+              </div>
+              <div className="tabbar-meta">C++17</div>
             </div>
-            <div className="tabbar-meta">C++17</div>
+
+            <div className="editor-body">
+              <div className="linenums" ref={lineNumsRef}>
+                {lineNumbers.map((n) => (
+                  <div key={n} className="linenum">
+                    {n}
+                  </div>
+                ))}
+              </div>
+              <textarea
+                ref={textareaRef}
+                className="code-input"
+                name="code"
+                spellCheck={false}
+                placeholder={`#include <iostream>\nusing namespace std;\n\nint main() {\n    // paste or write your C++ code here\n    return 0;\n}`}
+                value={code}
+                onChange={(e) => setCode(e.target.value)}
+                onScroll={handleScrollSync}
+              />
+            </div>
+
+            <div className="editor-footer">
+              <div className="footer-meta">
+                <span>{lineCount} lines</span>
+                <span className="footer-sep">·</span>
+                <span>{code.length} chars</span>
+              </div>
+              <button
+                type="button"
+                className="run-btn"
+                onClick={handleCheck}
+                disabled={loading || !code.trim()}
+              >
+                {loading ? (
+                  <>
+                    <span className="spinner" />
+                    Analyzing
+                  </>
+                ) : (
+                  <>
+                    <span className="run-icon">▶</span>
+                    Run Check
+                  </>
+                )}
+              </button>
+            </div>
+          </section>
+
+          <aside className="side-col">
+            <section className="panel result-panel">
+              {/* --- In your Editor View panel header --- */}
+<div className="panel-header">
+  <h3>Result</h3>
+  <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+    {result && (
+      <span
+        className={
+          "verdict " + (result.compiles ? "verdict--ok" : "verdict--err")
+        }
+      >
+        <span className="verdict-dot" />
+        {result.compiles ? "Compiles" : "Failed"}
+      </span>
+    )}
+    
+    {/* Copy Button for Editor Result */}
+    {result && result.corrected_code && (
+      <button
+        type="button"
+        className="copy-btn"
+        onClick={() => handleCopy(result.corrected_code, "editor-result")}
+      >
+        {copiedId === "editor-result" ? "Copied ✓" : "Copy Fix"}
+      </button>
+    )}
+  </div>
+</div>
+               
+              {!result && !loading && (
+                <div className="empty-state">
+                  <div className="empty-glyph">{"{ }"}</div>
+                  <p>Run a check to see compiler diagnostics and fixes here.</p>
+                </div>
+              )}
+
+              {loading && (
+                <div className="empty-state">
+                  <span className="spinner spinner--lg" />
+                  <p>Compiling and analyzing your code…</p>
+                </div>
+              )}
+
+              {result && (
+                <div className="result-body">
+                  {result.compiler_errors && result.compiler_errors.length > 0 && (
+                    <div className="errors-block">
+                      <div className="block-label">Compiler diagnostics</div>
+                      <ul className="error-list">
+                        {result.compiler_errors.map((err, i) => (
+                          <li key={i} className="error-item">
+                            <span className="error-line">L{err.line}</span>
+                            <span className="error-msg">{err.message}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+
+                  {result.corrected_code && (
+                    <div className="fixed-block">
+                      <div className="block-label-row">
+                        <div className="block-label">Suggested fix</div>
+                      </div>
+                      <pre className="fixed-code">{result.corrected_code}</pre>
+                    </div>
+                  )}
+                </div>
+              )}
+            </section>
+          </aside>
+        </main>
+      )}
+
+      {/* ================= HISTORY PAGE VIEW ================= */}
+      {activeTab === "history" && (
+        <div className="history-page">
+          <div className="history-page-header">
+            <h2>Submission History</h2>
+            <p>Review past code inputs, compilation results, and line-by-line corrected fixes.</p>
           </div>
 
-          <div className="editor-body">
-            <div className="linenums" ref={lineNumsRef}>
-              {lineNumbers.map((n) => (
-                <div key={n} className="linenum">
-                  {n}
+          {history.length === 0 ? (
+            <div className="empty-state panel">
+              <div className="empty-glyph">{"{ }"}</div>
+              <p>No previous submissions found in this session yet.</p>
+            </div>
+          ) : (
+            <div className="history-grid">
+              {history.map((item, index) => (
+                <div key={item.id || index} className="history-card">
+                  <div className="card-header">
+                    <span className="history-time">{item.created_at}</span>
+                    <span className={"verdict " + (item.compiles ? "verdict--ok" : "verdict--err")}>
+                      <span className="verdict-dot" />
+                      {item.compiles ? "Compiles" : "Failed"}
+                    </span>
+                  </div>
+
+                  {/* 2-Column Comparison Layout */}
+                  <div className="code-comparison">
+                    <div className="code-box">
+                      <div className="box-title">Input Code</div>
+                      <pre className="code-block">{item.code}</pre>
+                    </div>
+                    <div className="code-box">
+                      <div className="box-title-row">
+                        <div className="box-title">Corrected Code & Explanations</div>
+                        {item.corrected_code && (
+                          <button
+                            type="button"
+                            className="copy-btn"
+                            onClick={() => handleCopy(item.corrected_code, item.id || index)}
+                          >
+                            {copiedId === (item.id || index) ? "Copied ✓" : "Copy Fix"}
+                          </button>
+                        )}
+                      </div>
+                      <pre className="code-block highlighted-fix">
+                        {item.corrected_code || "// No corrections provided"}
+                      </pre>
+                    </div>
+                  </div>
                 </div>
               ))}
             </div>
-            <textarea
-              ref={textareaRef}
-              className="code-input"
-              name="code"
-              spellCheck={false}
-              placeholder={`#include <bits/stdc++.h>\nusing namespace std;\n\nint main() {\n    // paste or write your C++ code here\n    return 0;\n}`}
-              value={code}
-              onChange={(e) => setCode(e.target.value)}
-              onScroll={handleScrollSync}
-            />
-          </div>
-
-          <div className="editor-footer">
-            <div className="footer-meta">
-              <span>{lineCount} lines</span>
-              <span className="footer-sep">·</span>
-              <span>{code.length} chars</span>
-            </div>
-            <button
-              type="button"
-              className="run-btn"
-              onClick={handleCheck}
-              disabled={loading || !code.trim()}
-            >
-              {loading ? (
-                <>
-                  <span className="spinner" />
-                  Analyzing
-                </>
-              ) : (
-                <>
-                  <span className="run-icon">▶</span>
-                  Run Check
-                </>
-              )}
-            </button>
-          </div>
-        </section>
-
-        {/* ============ RESULTS + HISTORY PANEL ============ */}
-        <aside className="side-col">
-          <section className="panel result-panel">
-            <div className="panel-header">
-              <h3>Result</h3>
-              {result && (
-                <span
-                  className={
-                    "verdict " + (result.compiles ? "verdict--ok" : "verdict--err")
-                  }
-                >
-                  <span className="verdict-dot" />
-                  {result.compiles ? "Compiles" : "Failed"}
-                </span>
-              )}
-            </div>
-             
-            {!result && !loading && (
-              <div className="empty-state">
-                <div className="empty-glyph">{"{ }"}</div>
-                <p>Run a check to see compiler diagnostics and fixes here.</p>
-              </div>
-            )}
-
-            {loading && (
-              <div className="empty-state">
-                <span className="spinner spinner--lg" />
-                <p>Compiling and analyzing your code…</p>
-              </div>
-            )}
-
-            {result && (
-              <div className="result-body">
-                {result.compiler_errors && result.compiler_errors.length > 0 && (
-                  <div className="errors-block">
-                    <div className="block-label">Compiler diagnostics</div>
-                    <ul className="error-list">
-                      {result.compiler_errors.map((err, i) => (
-                        <li key={i} className="error-item">
-                          <span className="error-line">L{err.line}</span>
-                          <span className="error-msg">{err.message}</span>
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
-
-                {result.corrected_code && (
-                  <div className="fixed-block">
-                    <div className="block-label-row">
-                      <div className="block-label">Suggested fix</div>
-                      <button
-                        type="button"
-                        className="copy-btn"
-                        onClick={handleCopyFixed}
-                      >
-                        {copied ? "Copied ✓" : "Copy"}
-                      </button>
-                    </div>
-                    <pre className="fixed-code">{result.corrected_code}</pre>
-                  </div>
-                )}
-                {result.iterations !== undefined && (
-                  <p>Iterations: {result.iterations}</p>
-                )}
-              </div>
-            )}
-          </section>
-
-          <section className="panel history-panel">
-            <div className="panel-header">
-              <h3>Recent submissions</h3>
-              <span className="count-badge">{history.length}</span>
-            </div>
-
-            {history.length === 0 ? (
-              <div className="empty-state empty-state--small">
-                <p>No submissions yet.</p>
-              </div>
-            ) : (
-              <ul className="history-list">
-                {history.slice(0, 3).map((item, i) => (
-                  <li key={i} className="history-item">
-                    <div className="history-item-head">
-                      <span className="history-index">#{i + 1}</span>
-                    </div>
-                    <pre className="history-code">
-                      {item.code}
-                    </pre>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </section>
-        </aside>
-      </main>
+          )}
+        </div>
+      )}
     </div>
   );
 }
@@ -361,6 +402,42 @@ const CSS = `
 }
 .brand-name em { color: var(--blush); font-style: normal; }
 .brand-sub { font-size: 12px; color: var(--text-low); }
+
+/* Nav Switcher Tabs */
+.nav-tabs {
+  display: flex;
+  gap: 4px;
+  background: var(--bg-2);
+  border: 1px solid var(--border);
+  padding: 4px;
+  border-radius: 100px;
+}
+.nav-tab {
+  background: transparent;
+  border: none;
+  color: var(--text-mid);
+  padding: 6px 16px;
+  border-radius: 100px;
+  cursor: pointer;
+  font-family: var(--font-body);
+  font-weight: 600;
+  font-size: 13px;
+  transition: all 0.2s ease;
+}
+.nav-tab.active {
+  background: var(--bg-3);
+  color: var(--text-hi);
+  border: 1px solid var(--border-strong);
+}
+.badge {
+  background: var(--blush);
+  color: var(--bg-0);
+  padding: 1px 6px;
+  border-radius: 50px;
+  font-size: 11px;
+  margin-left: 4px;
+  font-family: var(--font-mono);
+}
 
 .status-pill {
   display: flex; align-items: center; gap: 8px;
@@ -557,23 +634,12 @@ const CSS = `
 .verdict--err { color: var(--danger); background: rgba(255,107,129,0.1); border: 1px solid rgba(255,107,129,0.3); }
 .verdict-dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; box-shadow: 0 0 6px currentColor; }
 
-.count-badge {
-  font-family: var(--font-mono);
-  font-size: 11px;
-  color: var(--text-low);
-  background: var(--bg-3);
-  border: 1px solid var(--border);
-  padding: 2px 8px;
-  border-radius: 100px;
-}
-
 .empty-state {
   display: flex; flex-direction: column; align-items: center; justify-content: center;
   text-align: center;
   padding: 40px 24px;
   color: var(--text-low);
 }
-.empty-state--small { padding: 22px 18px; }
 .empty-glyph {
   font-family: var(--font-mono);
   font-size: 22px;
@@ -581,7 +647,7 @@ const CSS = `
   margin-bottom: 8px;
   opacity: 0.6;
 }
-.empty-state p { margin: 0; font-size: 13px; max-width: 220px; line-height: 1.5; }
+.empty-state p { margin: 0; font-size: 13px; max-width: 260px; line-height: 1.5; }
 
 .result-body { padding: 16px 18px 20px; display: flex; flex-direction: column; gap: 18px; }
 
@@ -619,19 +685,6 @@ const CSS = `
 }
 .error-msg { font-size: 12.5px; color: var(--text-mid); line-height: 1.5; }
 
-.copy-btn {
-  font-size: 11px;
-  font-weight: 600;
-  color: var(--text-mid);
-  background: var(--bg-3);
-  border: 1px solid var(--border-strong);
-  padding: 4px 10px;
-  border-radius: 7px;
-  cursor: pointer;
-  transition: color 0.15s ease, border-color 0.15s ease;
-}
-.copy-btn:hover { color: var(--blush); border-color: var(--blush); }
-
 .fixed-code {
   font-family: var(--font-mono);
   font-size: 12.5px;
@@ -648,45 +701,122 @@ const CSS = `
   word-break: break-word;
 }
 
-.history-list { list-style: none; margin: 0; padding: 12px 18px 18px; display: flex; flex-direction: column; gap: 10px; }
-.history-item {
-  background: var(--bg-3);
+/* History Page Styling */
+.history-page {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+.history-page-header h2 {
+  margin: 0 0 4px 0;
+  font-family: var(--font-display);
+  font-size: 22px;
+  font-weight: 600;
+  color: var(--text-hi);
+}
+.history-page-header p {
+  margin: 0;
+  font-size: 13.5px;
+  color: var(--text-low);
+}
+.history-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+.history-card {
+  background: linear-gradient(180deg, var(--bg-2), var(--bg-1));
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 20px;
+  box-shadow: 0 20px 50px -20px rgba(0,0,0,0.6);
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.history-time {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--text-low);
+}
+.code-comparison {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+@media (max-width: 900px) {
+  .code-comparison { grid-template-columns: 1fr; }
+}
+.code-box {
+  background: rgba(0, 0, 0, 0.2);
   border: 1px solid var(--border);
   border-radius: 10px;
-  padding: 10px 12px;
-  transition: border-color 0.15s ease;
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
 }
-.history-item:hover { border-color: var(--border-strong); }
-.history-item-head { margin-bottom: 6px; }
-.history-index {
-  font-family: var(--font-mono);
-  font-size: 10.5px;
-  font-weight: 700;
-  color: var(--violet);
+.box-title {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-low);
+  margin-bottom: 10px;
 }
-
-/* Updated history-code styles to enable smooth scrolling */
-.history-code {
+.box-title-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 10px;
+}
+.box-title-row .box-title { margin-bottom: 0; }
+.code-block {
   font-family: var(--font-mono);
-  font-size: 11.5px;
-  line-height: 1.5;
+  font-size: 12px;
+  line-height: 1.6;
   color: var(--text-mid);
+  background: rgba(0,0,0,0.3);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 12px;
   margin: 0;
-  max-height: 120px;
+  max-height: 280px;
   overflow: auto;
-  white-space: pre;
-  word-break: normal;
+  white-space: pre-wrap;
+  word-break: break-word;
 }
+.highlighted-fix {
+  color: var(--text-hi);
+}
+.copy-btn {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-mid);
+  background: var(--bg-3);
+  border: 1px solid var(--border-strong);
+  padding: 4px 10px;
+  border-radius: 7px;
+  cursor: pointer;
+  transition: color 0.15s ease, border-color 0.15s ease;
+}
+.copy-btn:hover { color: var(--blush); border-color: var(--blush); }
 
 .editor-body::-webkit-scrollbar,
 .fixed-code::-webkit-scrollbar,
-.history-code::-webkit-scrollbar {
+.code-block::-webkit-scrollbar {
   width: 8px;
   height: 8px;
 }
 .editor-body::-webkit-scrollbar-thumb,
 .fixed-code::-webkit-scrollbar-thumb,
-.history-code::-webkit-scrollbar-thumb {
+.code-block::-webkit-scrollbar-thumb {
   background: var(--border-strong);
   border-radius: 8px;
 }
