@@ -1,10 +1,147 @@
 import React, { useState, useEffect, useRef } from "react";
+// const API_BASE="https://multi-agent-cppdebugger.onrender.com";
 
-const API_BASE="https://multi-agent-cppdebugger.onrender.com";
+const API_BASE = window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1"
+  ? "http://127.0.0.1:8000" 
+  : import.meta.env.VITE_API_URL;
 
-// const API_BASE = window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1"
-//   ? "http://127.0.0.1:8000" 
-//   : import.meta.env.VITE_API_URL;
+function cppHighlight(line) {
+  const tokenRegex = /(\/\/.*$|\/\*[\s\S]*?\*\/|"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|#[A-Za-z_]+|\b(?:alignas|alignof|and|and_eq|asm|auto|bitand|bitor|bool|break|case|catch|char|class|compl|concept|const|consteval|constexpr|constinit|const_cast|continue|co_await|co_return|co_yield|decltype|default|delete|do|double|dynamic_cast|else|enum|explicit|export|extern|false|float|for|friend|goto|if|inline|int|long|mutable|namespace|new|noexcept|not|nullptr|operator|or|private|protected|public|register|reinterpret_cast|requires|return|short|signed|sizeof|static|static_assert|static_cast|struct|switch|template|this|thread_local|throw|true|try|typedef|typeid|typename|union|unsigned|using|virtual|void|volatile|wchar_t|while|xor)\b|\b\d+(?:\.\d+)?\b|\b[A-Za-z_][A-Za-z0-9_]*(?=\s*\())/g;
+  const parts = [];
+  let last = 0;
+  let match;
+
+  while ((match = tokenRegex.exec(line)) !== null) {
+    if (match.index > last) {
+      parts.push({ text: line.slice(last, match.index), type: "plain" });
+    }
+    const value = match[0];
+    let type = "plain";
+    if (value.startsWith("//") || value.startsWith("/*")) type = "comment";
+    else if (value.startsWith('"') || value.startsWith("'")) type = "string";
+    else if (value.startsWith("#")) type = "preprocessor";
+    else if (/^\d/.test(value)) type = "number";
+    else if (/^[A-Za-z_][A-Za-z0-9_]*$/.test(value) && tokenRegex.lastIndex <= line.length) {
+      const keywords = new Set([
+        "alignas","alignof","and","and_eq","asm","auto","bitand","bitor","bool","break","case","catch","char","class","compl","concept","const","consteval","constexpr","constinit","const_cast","continue","co_await","co_return","co_yield","decltype","default","delete","do","double","dynamic_cast","else","enum","explicit","export","extern","false","float","for","friend","goto","if","inline","int","long","mutable","namespace","new","noexcept","not","nullptr","operator","or","private","protected","public","register","reinterpret_cast","requires","return","short","signed","sizeof","static","static_assert","static_cast","struct","switch","template","this","thread_local","throw","true","try","typedef","typeid","typename","union","unsigned","using","virtual","void","volatile","wchar_t","while","xor"
+      ]);
+      type = keywords.has(value) ? "keyword" : "function";
+    }
+    parts.push({ text: value, type });
+    last = match.index + value.length;
+  }
+
+  if (last < line.length) parts.push({ text: line.slice(last), type: "plain" });
+  if (!parts.length) parts.push({ text: "", type: "plain" });
+  return parts;
+}
+
+function HighlightedLine({ line }) {
+  return (
+    <>
+      {cppHighlight(line).map((part, index) => (
+        <span key={index} className={`cpp-token cpp-token--${part.type}`}>
+          {part.text}
+        </span>
+      ))}
+    </>
+  );
+}
+
+function buildDiffRows(oldValue, newValue) {
+  const oldLines = oldValue.replace(/\r\n/g, "\n").split("\n");
+  const newLines = newValue.replace(/\r\n/g, "\n").split("\n");
+  const n = oldLines.length;
+  const m = newLines.length;
+
+  // Keep the viewer responsive for very large files. For normal source files,
+  // this gives a precise line-by-line diff using an LCS table.
+  const maxCells = 2500000;
+  if (n * m > maxCells) {
+    const rows = [];
+    const max = Math.max(n, m);
+    for (let i = 0; i < max; i += 1) {
+      const oldLine = oldLines[i];
+      const newLine = newLines[i];
+      if (oldLine === newLine) rows.push({ type: "same", oldLine, newLine, oldNo: oldLine === undefined ? null : i + 1, newNo: newLine === undefined ? null : i + 1 });
+      else {
+        if (oldLine !== undefined) rows.push({ type: "removed", oldLine, newLine: null, oldNo: i + 1, newNo: null });
+        if (newLine !== undefined) rows.push({ type: "added", oldLine: null, newLine, oldNo: null, newNo: i + 1 });
+      }
+    }
+    return rows;
+  }
+
+  const dp = Array.from({ length: n + 1 }, () => new Uint32Array(m + 1));
+  for (let i = n - 1; i >= 0; i -= 1) {
+    for (let j = m - 1; j >= 0; j -= 1) {
+      dp[i][j] = oldLines[i] === newLines[j]
+        ? dp[i + 1][j + 1] + 1
+        : Math.max(dp[i + 1][j], dp[i][j + 1]);
+    }
+  }
+
+  const rows = [];
+  let i = 0;
+  let j = 0;
+  let oldNo = 1;
+  let newNo = 1;
+
+  while (i < n && j < m) {
+    if (oldLines[i] === newLines[j]) {
+      rows.push({ type: "same", oldLine: oldLines[i], newLine: newLines[j], oldNo, newNo });
+      i += 1; j += 1; oldNo += 1; newNo += 1;
+    } else if (dp[i + 1][j] >= dp[i][j + 1]) {
+      rows.push({ type: "removed", oldLine: oldLines[i], newLine: null, oldNo, newNo: null });
+      i += 1; oldNo += 1;
+    } else {
+      rows.push({ type: "added", oldLine: null, newLine: newLines[j], oldNo: null, newNo });
+      j += 1; newNo += 1;
+    }
+  }
+  while (i < n) {
+    rows.push({ type: "removed", oldLine: oldLines[i], newLine: null, oldNo, newNo: null });
+    i += 1; oldNo += 1;
+  }
+  while (j < m) {
+    rows.push({ type: "added", oldLine: null, newLine: newLines[j], oldNo: null, newNo });
+    j += 1; newNo += 1;
+  }
+  return rows;
+}
+
+function CodeDiffViewer({ oldValue = "", newValue = "" }) {
+  const rows = buildDiffRows(oldValue, newValue);
+  return (
+    <div className="custom-diff-viewer">
+      <div className="custom-diff-header">
+        <div>Original Code</div>
+        <div>Corrected Code</div>
+      </div>
+      <div className="custom-diff-body">
+        {rows.map((row, index) => {
+          const removed = row.type === "removed";
+          const added = row.type === "added";
+          return (
+            <div className={`diff-row diff-row--${row.type}`} key={`${index}-${row.oldNo}-${row.newNo}`}>
+              <div className="diff-side">
+                <span className="diff-line-number">{row.oldNo ?? ""}</span>
+                <code>{row.oldLine !== null && row.oldLine !== undefined ? <HighlightedLine line={row.oldLine} /> : ""}</code>
+              </div>
+              <div className="diff-side">
+                <span className="diff-line-number">{row.newNo ?? ""}</span>
+                <code>{row.newLine !== null && row.newLine !== undefined ? <HighlightedLine line={row.newLine} /> : ""}</code>
+              </div>
+              <span className={`diff-marker ${removed ? "diff-marker--removed" : added ? "diff-marker--added" : ""}`}>
+                {removed ? "−" : added ? "+" : ""}
+              </span>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
 
 export default function Home() {
   const [activeTab, setActiveTab] = useState("editor"); // "editor" or "history"
@@ -62,6 +199,54 @@ export default function Home() {
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleUpload = (event) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    const allowedExtensions = [".cpp", ".cc", ".cxx"];
+    const extension = file.name.slice(file.name.lastIndexOf(".")).toLowerCase();
+
+    if (!allowedExtensions.includes(extension)) {
+      alert("Please upload a C++ source file (.cpp, .cc, or .cxx).");
+      event.target.value = "";
+      return;
+    }
+
+    const reader = new FileReader();
+
+    reader.onload = (e) => {
+      setCode(typeof e.target.result === "string" ? e.target.result : "");
+      setResult(null);
+    };
+
+    reader.onerror = () => {
+      alert("Could not read the selected file.");
+    };
+
+    reader.readAsText(file);
+    event.target.value = "";
+  };
+
+  const handleDownload = (text, filename = "corrected_code.cpp") => {
+    if (typeof text !== "string" || !text.trim()) {
+      alert("No corrected code is available to download.");
+      return;
+    }
+
+    const blob = new Blob([text], { type: "text/plain;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+
+    link.href = url;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+
+    // Delay revoking the URL so the browser can start the download.
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
   };
 
   const handleCopy = async (text, id) => {
@@ -133,7 +318,17 @@ export default function Home() {
                 <span className="tab-dot" />
                 main.cpp
               </div>
-              <div className="tabbar-meta">C++17</div>
+              <div className="tabbar-tools">
+                <label className="upload-btn">
+                  Upload C++
+                  <input
+                    type="file"
+                    accept=".cpp,.cc,.cxx"
+                    onChange={handleUpload}
+                  />
+                </label>
+                <div className="tabbar-meta">C++17</div>
+              </div>
             </div>
 
             <div className="editor-body">
@@ -200,15 +395,24 @@ export default function Home() {
       </span>
     )}
     
-    {/* Copy Button for Editor Result */}
+    {/* Copy and download buttons for the corrected result */}
     {result && result.corrected_code && (
-      <button
-        type="button"
-        className="copy-btn"
-        onClick={() => handleCopy(result.corrected_code, "editor-result")}
-      >
-        {copiedId === "editor-result" ? "Copied ✓" : "Copy Fix"}
-      </button>
+      <div className="result-actions">
+        <button
+          type="button"
+          className="copy-btn"
+          onClick={() => handleCopy(result.corrected_code, "editor-result")}
+        >
+          {copiedId === "editor-result" ? "Copied ✓" : "Copy Fix"}
+        </button>
+        <button
+          type="button"
+          className="download-btn"
+          onClick={() => handleDownload(result.corrected_code, "corrected_code.cpp")}
+        >
+          Download .cpp
+        </button>
+      </div>
     )}
   </div>
 </div>
@@ -246,9 +450,16 @@ export default function Home() {
                   {result.corrected_code && (
                     <div className="fixed-block">
                       <div className="block-label-row">
-                        <div className="block-label">Suggested fix</div>
+                        <div className="block-label">Code Diff</div>
+                        <div className="diff-legend">
+                          <span className="diff-legend-item diff-legend-item--removed">− Removed</span>
+                          <span className="diff-legend-item diff-legend-item--added">+ Added</span>
+                        </div>
                       </div>
-                      <pre className="fixed-code">{result.corrected_code}</pre>
+
+                      <div className="diff-viewer-wrap">
+                        <CodeDiffViewer oldValue={code || ""} newValue={result.corrected_code} />
+                      </div>
                     </div>
                   )}
                 </div>
@@ -283,30 +494,29 @@ export default function Home() {
                     </span>
                   </div>
 
-                  {/* 2-Column Comparison Layout */}
-                  <div className="code-comparison">
-                    <div className="code-box">
-                      <div className="box-title">Input Code</div>
-                      <pre className="code-block">{item.code}</pre>
-                    </div>
-                    <div className="code-box">
-                      <div className="box-title-row">
-                        <div className="box-title">Corrected Code & Explanations</div>
-                        {item.corrected_code && (
-                          <button
-                            type="button"
-                            className="copy-btn"
-                            onClick={() => handleCopy(item.corrected_code, item.id || index)}
-                          >
-                            {copiedId === (item.id || index) ? "Copied ✓" : "Copy Fix"}
-                          </button>
-                        )}
-                      </div>
-                      <pre className="code-block highlighted-fix">
-                        {item.corrected_code || "// No corrections provided"}
-                      </pre>
+                  <div className="history-diff-header">
+                    <div className="box-title">Code Diff</div>
+                    <div className="history-actions">
+                      {item.corrected_code && (
+                        <button type="button" className="copy-btn" onClick={() => handleCopy(item.corrected_code, item.id || index)}>
+                          {copiedId === (item.id || index) ? "Copied ✓" : "Copy Fix"}
+                        </button>
+                      )}
+                      {item.corrected_code && (
+                        <button type="button" className="download-btn" onClick={() => handleDownload(item.corrected_code, `corrected_code_${item.id || index}.cpp`)}>
+                          Download .cpp
+                        </button>
+                      )}
                     </div>
                   </div>
+
+                  {item.corrected_code ? (
+                    <div className="diff-viewer-wrap history-diff-viewer">
+                      <CodeDiffViewer oldValue={item.code || ""} newValue={item.corrected_code} />
+                    </div>
+                  ) : (
+                    <pre className="code-block highlighted-fix">// No corrections provided</pre>
+                  )}
                 </div>
               ))}
             </div>
@@ -797,6 +1007,178 @@ const CSS = `
 .highlighted-fix {
   color: var(--text-hi);
 }
+.tabbar-tools {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.upload-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-mid);
+  background: var(--bg-3);
+  border: 1px solid var(--border-strong);
+  padding: 6px 11px;
+  border-radius: 7px;
+  cursor: pointer;
+  transition: color 0.15s ease, border-color 0.15s ease, background 0.15s ease;
+}
+
+.upload-btn:hover {
+  color: var(--blush);
+  border-color: var(--blush);
+  background: var(--bg-2);
+}
+
+.upload-btn input {
+  display: none;
+}
+
+.result-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.download-btn {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-mid);
+  background: var(--bg-3);
+  border: 1px solid var(--border-strong);
+  padding: 4px 10px;
+  border-radius: 7px;
+  cursor: pointer;
+  transition: color 0.15s ease, border-color 0.15s ease, background 0.15s ease;
+}
+
+.download-btn:hover {
+  color: var(--mono);
+  border-color: var(--mono);
+  background: var(--bg-2);
+}
+
+
+.custom-diff-viewer {
+  width: 100%;
+  max-height: 520px;
+  overflow: auto;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: #100b15;
+  color: var(--text-hi);
+}
+.custom-diff-header {
+  position: sticky;
+  top: 0;
+  z-index: 3;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1px;
+  padding: 0;
+  background: #1c1424;
+  border-bottom: 1px solid var(--border-strong);
+  font-family: var(--font-body);
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-hi);
+}
+.custom-diff-header > div { padding: 9px 12px; }
+.custom-diff-header > div:first-child { border-right: 1px solid var(--border); }
+.custom-diff-body { min-width: 760px; }
+.diff-row {
+  position: relative;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1px;
+  min-height: 23px;
+  background: rgba(255,255,255,0.025);
+  border-bottom: 1px solid rgba(255,255,255,0.025);
+}
+.diff-side {
+  display: grid;
+  grid-template-columns: 48px minmax(0, 1fr);
+  align-items: stretch;
+  min-width: 0;
+  background: #120d18;
+}
+.diff-side code {
+  display: block;
+  min-width: 0;
+  padding: 2px 10px;
+  white-space: pre;
+  overflow: visible;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 1.6;
+  color: #f3e9ee;
+}
+.diff-line-number {
+  display: block;
+  padding: 2px 9px 2px 6px;
+  text-align: right;
+  user-select: none;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  line-height: 1.75;
+  color: #756a78;
+  background: #18111f;
+  border-right: 1px solid rgba(255,255,255,0.05);
+}
+.diff-row--removed .diff-side:first-child { background: rgba(231, 76, 60, 0.28); }
+.diff-row--removed .diff-side:first-child .diff-line-number { background: rgba(231, 76, 60, 0.42); color: #ffd6d1; }
+.diff-row--added .diff-side:last-child { background: rgba(46, 204, 113, 0.28); }
+.diff-row--added .diff-side:last-child .diff-line-number { background: rgba(46, 204, 113, 0.42); color: #d7ffe8; }
+.diff-row--removed .diff-side:last-child,
+.diff-row--added .diff-side:first-child { background: #120d18; }
+.diff-marker {
+  position: absolute;
+  top: 3px;
+  left: calc(50% - 9px);
+  z-index: 2;
+  width: 18px;
+  height: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 700;
+  pointer-events: none;
+}
+.diff-marker--removed { color: #ff8f9e; background: #35141c; }
+.diff-marker--added { color: #70efb4; background: #123522; }
+.cpp-token--keyword { color: #caa9ff; font-weight: 600; }
+.cpp-token--string { color: #9fe3b0; }
+.cpp-token--comment { color: #7e7483; font-style: italic; }
+.cpp-token--preprocessor { color: #f0a6c4; }
+.cpp-token--number { color: #f4c67a; }
+.cpp-token--function { color: #8ed5ff; }
+
+.diff-viewer-wrap {
+  width: 100%;
+  max-height: 520px;
+  overflow: auto;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: #120d18;
+}
+
+.diff-viewer-wrap table { width: 100%; }
+.diff-viewer-wrap code, .diff-viewer-wrap pre { font-family: var(--font-mono) !important; }
+.diff-legend { display: flex; align-items: center; gap: 8px; font-family: var(--font-mono); font-size: 10px; }
+.diff-legend-item { padding: 3px 7px; border-radius: 5px; border: 1px solid transparent; }
+.diff-legend-item--removed { color: var(--danger); background: rgba(255,107,129,.08); border-color: rgba(255,107,129,.18); }
+.diff-legend-item--added { color: var(--mono); background: rgba(87,227,176,.08); border-color: rgba(87,227,176,.18); }
+.history-diff-header { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.history-actions { display: flex; align-items: center; gap: 8px; }
+.history-diff-viewer { max-height: 560px; }
+
 .copy-btn {
   font-size: 11px;
   font-weight: 600;
