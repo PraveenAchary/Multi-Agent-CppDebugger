@@ -28,7 +28,7 @@ def _strip_code_fences(text: str) -> str:
 def repair_code(code: str, diagnostics: dict) -> str:
     diagnostics_text = _format_diagnostics(diagnostics)
 
-    prompt = f"""You are a C++ code repair tool. Fix the following code so it compiles cleanly.
+        prompt = f"""You are a C++ code repair tool. Fix the following code so it compiles cleanly and resolves all listed issues.
 
 Original code:
 {code}
@@ -37,12 +37,9 @@ Compiler/static analysis diagnostics:
 {diagnostics_text}
 
 Rules:
-- Return ONLY the corrected C++ code.
+- Return ONLY the corrected C++ code, with no markdown code fences.
 - Preserve the original program's intent and structure as much as possible; fix only what's broken.
--In the corrected_code output, insert clean C++ comments (//) directly above or beside the modified lines explaining the cause of the error, what was fixed, and how it was corrected.
-
-
-
+- Insert clean C++ comments (//) directly above or beside the modified lines explaining the cause of the error, what was fixed, and how it was corrected.
 """
 
     try:
