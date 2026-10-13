@@ -1,6 +1,6 @@
 from typing import TypedDict, List, Dict
 from langgraph.graph import StateGraph, END
-
+import time
 from Agent1.compiler_service import analyze_cpp
 from Agent1.compiler_service import compile_check as verify_code
 from Agent2.repair_service import repair_code
@@ -68,6 +68,7 @@ def _build_graph():
 _agent = _build_graph()
 
 def run_debug_agent(code: str) -> dict:
+    t0 = time.time()
     initial_state: DebugState = {
         "original_code": code,
         "current_code": code,
@@ -84,4 +85,5 @@ def run_debug_agent(code: str) -> dict:
         "corrected_code": final_state["current_code"],
         "iterations": final_state["iteration"],
         "static_warnings": final_state["static_warnings"],
+        "time_sec": round(time.time() - t0, 2),
     }
