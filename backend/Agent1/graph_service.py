@@ -83,4 +83,5 @@ def run_debug_agent(code: str) -> dict:
         "compiler_errors": final_state["compiler_errors"],
         "corrected_code": final_state["current_code"],
         "iterations": final_state["iteration"],
+        "static_warnings": final_state["static_warnings"],
     }
